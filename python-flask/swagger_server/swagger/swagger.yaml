@@ -1,0 +1,893 @@
+openapi: 3.0.0
+info:
+  title: Snek Game API
+  description: Snek Game API
+  contact:
+    email: you@your-company.com
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0-oas3
+servers:
+- url: https://virtserver.swaggerhub.com/vmuckxyz/snek/1.0.0
+security:
+- cookieAuth: []
+tags:
+- name: admin
+  description: Secured Admin-only calls
+- name: anonymous
+  description: APIs available to the public - no sign-in required.
+- name: default
+  description: APIs used by logged-in users.
+paths:
+  /:
+    get:
+      tags:
+      - anonymous
+      summary: Get (or redirect to) the HTML interface.  Also handles checking the
+        auth cookie.
+      operationId: get_index
+      responses:
+        "200":
+          content:
+            text/html:
+              schema:
+                type: string
+                x-content-type: text/html
+      security: []
+      x-openapi-router-controller: swagger_server.controllers.anonymous_controller
+  /tos:
+    get:
+      tags:
+      - anonymous
+      summary: Terms of Service
+      description: |
+        Returns the Terms of Service for this game.
+      operationId: get_terms
+      responses:
+        "200":
+          description: terms of service found and returned
+          content:
+            text/plain:
+              schema:
+                type: string
+                x-content-type: text/plain
+        "404":
+          description: No Terms of service defined for this service
+      security: []
+      x-openapi-router-controller: swagger_server.controllers.anonymous_controller
+  /signin:
+    post:
+      tags:
+      - anonymous
+      summary: Logs in and returns the authentication cookie
+      operationId: sign_in_user
+      requestBody:
+        description: A JSON object containing the login and password.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInRequest'
+        required: true
+      responses:
+        "200":
+          description: |
+            Successfully authenticated. The session ID is returned in a cookie named `JSESSIONID`. You need to include this cookie in subsequent requests.
+          headers:
+            Set-Cookie:
+              style: simple
+              explode: false
+              schema:
+                type: string
+                example: JSESSIONID=abcde12345; Path=/; HttpOnly
+        "401":
+          description: User credentials rejected.
+        "403":
+          description: User account is frozen or banned.
+      security: []
+      x-openapi-router-controller: swagger_server.controllers.anonymous_controller
+  /signout:
+    get:
+      operationId: sign_out
+      responses:
+        "200":
+          description: OK
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+  /newuser:
+    post:
+      operationId: create_user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUpRequest'
+        required: true
+      responses:
+        "200":
+          description: A new user was created and signed in.
+          headers:
+            Set-Cookie:
+              style: simple
+              explode: false
+              schema:
+                type: string
+                example: JSESSIONID=abcde12345; Path=/; HttpOnly
+        "400":
+          description: User credentials are invalid for some reason.  Response body
+            will contain the reason.
+          content:
+            text/plain: {}
+        "403":
+          description: User e-mail or other strong ID is banned from the server.
+        "409":
+          description: User ID or other ID is already in use.
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+  /resume:
+    get:
+      summary: Gets the current state of the UI based on the state of the user's game
+        session.
+      operationId: resume
+      parameters:
+      - name: full
+        in: query
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: string
+          enum:
+          - "true"
+          - "false"
+      responses:
+        "200":
+          description: User successfully signed in and has valid state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameState'
+        "401":
+          description: User doesn't have a valid session, or is signed out.
+          content:
+            text/plain: {}
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+  /next:
+    post:
+      summary: Processes a user interaction, and returns the next state of the game.
+      operationId: next
+      parameters:
+      - name: full
+        in: query
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: string
+          enum:
+          - "true"
+          - "false"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/body'
+        required: true
+      responses:
+        "200":
+          description: User successfully signed in and has valid state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameState'
+        "401":
+          description: User doesn't have a valid session, or is signed out.
+          content:
+            text/plain: {}
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+  /inv:
+    get:
+      summary: Gets the user's item inventory, including active equipment
+      description: Get the current user's inventory.
+      operationId: get_inventory
+      responses:
+        "200":
+          description: User's inventory successfully returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inventory'
+        "204":
+          description: User is currently unable to access inventory due to scenario.
+        "401":
+          description: User doesn't have a valid session, or is signed out.
+          content:
+            text/plain: {}
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+  /quests:
+    description: Get the current user's quest list.
+    get:
+      summary: Get the user's quest list
+      operationId: get_quests
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Quest'
+                x-content-type: application/json
+        "401":
+          description: User doesn't have a valid session, or is signed out.
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+  /map:
+    get:
+      operationId: get_map
+      responses:
+        "200": {}
+        "204":
+          description: No map is available to the user at this time.
+        "401":
+          description: User doesn't have a valid session, or is signed out.
+          content:
+            text/plain: {}
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+  /options:
+    get:
+      operationId: get_options
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Option'
+                x-content-type: application/json
+        "401": {}
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+    post:
+      operationId: set_options
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/Option'
+        required: true
+      responses:
+        "200":
+          description: Options successfully updated.
+        "400":
+          description: Options don't match what is allowed on the server.
+        "401": {}
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+  /bug/{id}:
+    get:
+      tags:
+      - anonymous
+      operationId: bug_id_get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Gets the full context of a given bug.  Depending on the user's
+            auth, may return limited information.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bug'
+        "404":
+          description: Bug ID doesn't exist in the database
+      security: []
+      x-openapi-router-controller: swagger_server.controllers.anonymous_controller
+  /bug/new:
+    post:
+      description: Creates a new bug.  Copies the user's current game state and attaches
+        it to the bug.
+      operationId: post_new_bug
+      requestBody:
+        content:
+          text/plain: {}
+        required: false
+      responses:
+        "200":
+          description: Bug submitted to the game's database.  An ID is returned to
+            the user for copying to Bugzilla or another work item tracker.
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+  /debug:
+    get:
+      operationId: get_current_state
+      responses:
+        "200":
+          description: Gets a full representation of the user's game state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebugState'
+      x-openapi-router-controller: swagger_server.controllers.default_controller
+  /debug/{id}:
+    get:
+      tags:
+      - admin
+      summary: Gets the current game state of the user with the given ID.
+      operationId: get_user_state
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Gets a full representation of the user's game state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebugState'
+        "401":
+          description: User isn't logged in.
+        "403":
+          description: User doesn't have the privileges needed to perform this operation.
+      x-openapi-router-controller: swagger_server.controllers.admin_controller
+  /mimicuser/{id}:
+    summary: Copies the current game snapshot associated with a given user ID to a
+      new user, and associates that user with the current session.
+    get:
+      tags:
+      - admin
+      operationId: mimic_user_by_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: A new user was created with the existing user's state.
+        "401":
+          description: User isn't logged in.
+        "403":
+          description: User doesn't have the privileges needed to perform this operation.
+      x-openapi-router-controller: swagger_server.controllers.admin_controller
+  /mimicbug/{id}:
+    get:
+      tags:
+      - admin
+      summary: Copies the game snapshot associated with a given bug to a new user,
+        and associates that user with the current session.
+      operationId: mimic_bug_by_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: A new user was created.
+        "401":
+          description: User isn't logged in.
+        "403":
+          description: User doesn't have the privileges needed to perform this operation.
+      x-openapi-router-controller: swagger_server.controllers.admin_controller
+components:
+  schemas:
+    Bug:
+      type: object
+      properties:
+        id:
+          type: string
+        user:
+          type: string
+        info:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        state:
+          $ref: '#/components/schemas/DebugState'
+      example:
+        id: id
+        state: ""
+        user: user
+        info: info
+        timestamp: 2000-01-23T04:56:07.000+00:00
+    DebugState:
+      allOf:
+      - $ref: '#/components/schemas/GameState'
+      - type: object
+        properties:
+          vars:
+            type: object
+            additionalProperties: true
+    GameState:
+      type: object
+      properties:
+        content:
+          $ref: '#/components/schemas/Content'
+        compass:
+          $ref: '#/components/schemas/Compass'
+        inventory:
+          $ref: '#/components/schemas/Inventory'
+        people:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        exits:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        map:
+          $ref: '#/components/schemas/Map'
+        quests:
+          type: array
+          items:
+            $ref: '#/components/schemas/Quest'
+        showMap:
+          type: integer
+        showInventory:
+          type: integer
+      example:
+        exits:
+        - null
+        - null
+        compass:
+          se: Southeast Room
+          s: South Room
+          sw: Southwest Room
+          e: East Room
+          in: Inside
+          ne: Northeast Room
+          w: West Room
+          nw: NorthWest Room
+          up: Room Above
+          down: Room Below
+          n: North Room
+          out: Outside
+        quests:
+        - id: start_1
+          text: You entered this world.  Make sure you aren't taken out of it!
+          title: Starting a new life
+          status: not_started
+        - id: start_1
+          text: You entered this world.  Make sure you aren't taken out of it!
+          title: Starting a new life
+          status: not_started
+        showMap: 1
+        showInventory: 5
+        inventory:
+          equipment:
+          - ""
+          - ""
+          keyItems:
+          - null
+          - null
+          items:
+          - description: A wheel of extremely foul-smelling blue and yellow cheese
+            id: funky cheese
+            text: Funky Cheese
+            commands:
+            - text: Eat
+              cmd: eat
+            - text: Eat
+              cmd: eat
+          - description: A wheel of extremely foul-smelling blue and yellow cheese
+            id: funky cheese
+            text: Funky Cheese
+            commands:
+            - text: Eat
+              cmd: eat
+            - text: Eat
+              cmd: eat
+        people:
+        - null
+        - null
+        map:
+          image: http://example.com/aeiou
+          size:
+            x: 0
+            y: 6
+          description: description
+          title: title
+          items:
+          - submap: null
+            image: /example/foo.png
+            size: null
+            blocked: true
+            pos: null
+            description: The Vanillaville commons, where people gather and generally
+              get in the way of your destination.
+            id: main_commons
+            text: Vanillaville Commons
+          - submap: null
+            image: /example/foo.png
+            size: null
+            blocked: true
+            pos: null
+            description: The Vanillaville commons, where people gather and generally
+              get in the way of your destination.
+            id: main_commons
+            text: Vanillaville Commons
+        content:
+          text: text
+          type: markdown
+    ContentType:
+      type: string
+      enum:
+      - markdown
+      - raw
+      - iframe
+    Content:
+      required:
+      - text
+      type: object
+      properties:
+        text:
+          type: string
+        type:
+          $ref: '#/components/schemas/ContentType'
+      example:
+        text: text
+        type: markdown
+    SignInRequest:
+      required:
+      - password
+      - username
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+        rememberMe:
+          type: integer
+    SignUpRequest:
+      required:
+      - password
+      - username
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+        email:
+          type: string
+        rememberMe:
+          type: integer
+    Command:
+      required:
+      - cmd
+      - text
+      type: object
+      properties:
+        text:
+          type: string
+          example: Eat
+        cmd:
+          type: string
+          example: eat
+      example:
+        text: Eat
+        cmd: eat
+    Item:
+      required:
+      - id
+      type: object
+      properties:
+        id:
+          type: string
+          example: funky cheese
+        text:
+          type: string
+          example: Funky Cheese
+        description:
+          type: string
+          example: A wheel of extremely foul-smelling blue and yellow cheese
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/Command'
+      example:
+        description: A wheel of extremely foul-smelling blue and yellow cheese
+        id: funky cheese
+        text: Funky Cheese
+        commands:
+        - text: Eat
+          cmd: eat
+        - text: Eat
+          cmd: eat
+    Equipped:
+      allOf:
+      - $ref: '#/components/schemas/Item'
+      - type: object
+        properties:
+          slot:
+            type: string
+            example: torso
+    Inventory:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        equipment:
+          type: array
+          items:
+            $ref: '#/components/schemas/Equipped'
+        keyItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+      example:
+        equipment:
+        - ""
+        - ""
+        keyItems:
+        - null
+        - null
+        items:
+        - description: A wheel of extremely foul-smelling blue and yellow cheese
+          id: funky cheese
+          text: Funky Cheese
+          commands:
+          - text: Eat
+            cmd: eat
+          - text: Eat
+            cmd: eat
+        - description: A wheel of extremely foul-smelling blue and yellow cheese
+          id: funky cheese
+          text: Funky Cheese
+          commands:
+          - text: Eat
+            cmd: eat
+          - text: Eat
+            cmd: eat
+    Quest:
+      required:
+      - id
+      - status
+      - text
+      - title
+      type: object
+      properties:
+        id:
+          type: string
+          example: start_1
+        title:
+          type: string
+          example: Starting a new life
+        text:
+          type: string
+          example: You entered this world.  Make sure you aren't taken out of it!
+        status:
+          type: string
+          enum:
+          - not_started
+          - in_progress
+          - failed
+          - failed_try_again
+          - completed
+          - completed_try_again
+      example:
+        id: start_1
+        text: You entered this world.  Make sure you aren't taken out of it!
+        title: Starting a new life
+        status: not_started
+    Compass:
+      type: object
+      properties:
+        n:
+          type: string
+          example: North Room
+        ne:
+          type: string
+          example: Northeast Room
+        e:
+          type: string
+          example: East Room
+        se:
+          type: string
+          example: Southeast Room
+        s:
+          type: string
+          example: South Room
+        sw:
+          type: string
+          example: Southwest Room
+        w:
+          type: string
+          example: West Room
+        nw:
+          type: string
+          example: NorthWest Room
+        up:
+          type: string
+          example: Room Above
+        down:
+          type: string
+          example: Room Below
+        in:
+          type: string
+          example: Inside
+        out:
+          type: string
+          example: Outside
+      example:
+        se: Southeast Room
+        s: South Room
+        sw: Southwest Room
+        e: East Room
+        in: Inside
+        ne: Northeast Room
+        w: West Room
+        nw: NorthWest Room
+        up: Room Above
+        down: Room Below
+        n: North Room
+        out: Outside
+    Vector2i:
+      required:
+      - x
+      - "y"
+      type: object
+      properties:
+        x:
+          type: integer
+        y:
+          type: integer
+      example:
+        x: 0
+        y: 6
+    MapItem:
+      required:
+      - description
+      - image
+      - pos
+      - size
+      - text
+      type: object
+      properties:
+        pos:
+          $ref: '#/components/schemas/Vector2i'
+        size:
+          $ref: '#/components/schemas/Vector2i'
+        image:
+          type: string
+          format: uri
+          example: /example/foo.png
+        id:
+          type: string
+          example: main_commons
+        text:
+          type: string
+          example: Vanillaville Commons
+        description:
+          type: string
+          example: The Vanillaville commons, where people gather and generally get
+            in the way of your destination.
+        blocked:
+          type: boolean
+        submap:
+          $ref: '#/components/schemas/Map'
+      example:
+        submap: null
+        image: /example/foo.png
+        size: null
+        blocked: true
+        pos: null
+        description: The Vanillaville commons, where people gather and generally get
+          in the way of your destination.
+        id: main_commons
+        text: Vanillaville Commons
+    Map:
+      required:
+      - description
+      - image
+      - items
+      - size
+      - title
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        image:
+          type: string
+          format: uri
+        size:
+          $ref: '#/components/schemas/Vector2i'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MapItem'
+      example:
+        image: http://example.com/aeiou
+        size:
+          x: 0
+          y: 6
+        description: description
+        title: title
+        items:
+        - submap: null
+          image: /example/foo.png
+          size: null
+          blocked: true
+          pos: null
+          description: The Vanillaville commons, where people gather and generally
+            get in the way of your destination.
+          id: main_commons
+          text: Vanillaville Commons
+        - submap: null
+          image: /example/foo.png
+          size: null
+          blocked: true
+          pos: null
+          description: The Vanillaville commons, where people gather and generally
+            get in the way of your destination.
+          id: main_commons
+          text: Vanillaville Commons
+    Option:
+      required:
+      - type
+      - value
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - switch
+          - range
+          - enum
+        value:
+          type: integer
+        enum:
+          type: array
+          items:
+            type: string
+        minValue:
+          type: integer
+        maxValue:
+          type: integer
+      example:
+        minValue: 6
+        maxValue: 1
+        type: switch
+        value: 0
+        enum:
+        - enum
+        - enum
+    body:
+      required:
+      - id
+      type: object
+      properties:
+        id:
+          type: string
+        cmd:
+          type: string
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      name: JSESSIONID
+      in: cookie
+      x-apikeyInfoFunc: swagger_server.controllers.authorization_controller.check_cookieAuth
+
